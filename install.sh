@@ -118,6 +118,9 @@ sleep 15
 echo -e "${GRN}X-> Starting Panel Container...${NC}"
 docker-compose up -d panel
 
+echo -e "${CYN}X-> Configuring MySQL Client Options (Fixing SSL Error)...${NC}"
+docker-compose exec -T panel sh -c "mkdir -p /etc/my.cnf.d && echo -e '[client]\nssl=OFF\nskip-ssl' > /etc/my.cnf.d/disable-ssl.cnf"
+
 echo -e "${CYN}X-> Generating Encryption Key and Running Migrations...${NC}"
 docker-compose exec -T panel php artisan key:generate --force
 docker-compose exec -T panel php artisan migrate --seed --force
