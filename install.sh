@@ -32,8 +32,25 @@ done
 echo -e "${GRN} Thanks for Subscribing! If Not Do It Rn${NC}\n"
 sleep 1
 
+# Detect Docker Compose Command
+if command -v docker-compose &> /dev/null; then
+    DC_CMD="docker-compose"
+elif docker compose version &> /dev/null; then
+    DC_CMD="docker compose"
+else
+    echo -e "${YEL}X-> Installing Docker Compose plugin...${NC}"
+    apt update -y && apt install -y docker-compose-plugin docker-compose || true
+    if command -v docker-compose &> /dev/null; then
+        DC_CMD="docker-compose"
+    else
+        DC_CMD="docker compose"
+    fi
+fi
+
+echo -e "${YEL}X-> Using Compose command: ${DC_CMD}${NC}"
+
 echo -e "${YEL}X-> Cleaning old volumes and starting clean...${NC}"
-docker-compose down -v --remove-orphans 2>/dev/null
+$DC_CMD down -v --remove-orphans 2>/dev/null
 rm -rf ./data
 
 echo -e "${CYN}X-> Writing docker-compose.yml...${NC}"
@@ -104,22 +121,22 @@ networks:
 EOF
 
 echo -e "${CYN}X-> Starting containers...${NC}"
-docker-compose up -d
+$DC_CMD up -d
 
 echo -e "${CYN}X-> Waiting 20 seconds for MariaDB to boot...${NC}"
 sleep 20
 
 echo -e "${CYN}X-> Disabling SSL requirement in MySQL client...${NC}"
-docker-compose exec -T panel sh -c 'mkdir -p /etc/my.cnf.d && printf "[client]\nssl=0\nskip-ssl=1\n[mysql]\nssl=0\nskip-ssl=1\n" > /etc/my.cnf.d/disable-ssl.cnf'
+$DC_CMD exec -T panel sh -c 'mkdir -p /etc/my.cnf.d && printf "[client]\nssl=0\nskip-ssl=1\n[mysql]\nssl=0\nskip-ssl=1\n" > /etc/my.cnf.d/disable-ssl.cnf'
 
 echo -e "${CYN}X-> Generating Encryption Key...${NC}"
-docker-compose exec -T panel php artisan key:generate --force
+$DC_CMD exec -T panel php artisan key:generate --force
 
 echo -e "${CYN}X-> Migrating Database Schema...${NC}"
-docker-compose exec -T panel php artisan migrate:fresh --seed --force
+$DC_CMD exec -T panel php artisan migrate:fresh --seed --force
 
 echo -e "${GRN}X-> Creating Admin Account (Non-Interactive)...${NC}"
-docker-compose exec -T panel php artisan p:user:make \
+$DC_CMD exec -T panel php artisan p:user:make \
   --email="admin@example.com" \
   --username="admin" \
   --firstname="Admin" \
