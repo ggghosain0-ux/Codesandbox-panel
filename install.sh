@@ -91,6 +91,7 @@ services:
       DB_DATABASE: "panel"
       DB_USERNAME: "pterodactyl"
       DB_PASSWORD: "ptero_db_password_123"
+      DB_MYSQL_CLIENT_FLAGS: 0
       MAIL_FROM: "noreply@example.com"
       MAIL_DRIVER: "smtp"
       MAIL_HOST: "mail"
@@ -112,14 +113,15 @@ mkdir -p ./data/{database,var,nginx,certs,logs}
 echo -e "${GRN}X-> Starting Database and Cache...${NC}"
 docker-compose up -d database cache
 
-echo -e "${CYN}X-> Waiting 15 seconds for MariaDB to initialize...${NC}"
-sleep 15
+echo -e "${CYN}X-> Waiting 20 seconds for MariaDB to fully initialize...${NC}"
+sleep 20
 
 echo -e "${GRN}X-> Starting Panel Container...${NC}"
 docker-compose up -d panel
 
-echo -e "${CYN}X-> Configuring MySQL Client Options (Fixing SSL Error)...${NC}"
-docker-compose exec -T panel sh -c "mkdir -p /etc/my.cnf.d && echo -e '[client]\nssl=OFF\nskip-ssl' > /etc/my.cnf.d/disable-ssl.cnf"
+echo -e "${CYN}X-> Disabling SSL requirement in container MySQL client...${NC}"
+docker-compose exec -T panel sh -c 'mkdir -p /etc/my.cnf.d && printf "[client]\nssl=0\nskip-ssl=1\n[mysql]\nssl=0\nskip-ssl=1\n[mariadb-client]\ndisable-ssl-verify-server-cert=1\n" > /etc/my.cnf.d/disable-ssl.cnf'
+docker-compose exec -T panel sh -c 'printf "[client]\nssl=0\nskip-ssl=1\n[mysql]\nssl=0\nskip-ssl=1\n[mariadb-client]\ndisable-ssl-verify-server-cert=1\n" >> /etc/my.cnf'
 
 echo -e "${CYN}X-> Generating Encryption Key and Running Migrations...${NC}"
 docker-compose exec -T panel php artisan key:generate --force
