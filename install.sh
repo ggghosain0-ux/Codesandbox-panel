@@ -32,13 +32,9 @@ done
 echo -e "${GRN} Thanks for Subscribing! If Not Do It Rn${NC}\n"
 sleep 1
 
-echo -e "${YEL}X-> Installing Docker and Docker Compose...${NC}"
-apt update -y
-apt install -y docker.io docker-compose
-
-echo -e "${CYN}X-> Setting up Pterodactyl Panel directories...${NC}"
-mkdir -p pterodactyl/panel
-cd pterodactyl/panel || exit
+echo -e "${YEL}X-> Cleaning old volumes and starting clean...${NC}"
+docker-compose down -v --remove-orphans 2>/dev/null
+rm -rf ./data
 
 echo -e "${CYN}X-> Writing docker-compose.yml...${NC}"
 cat <<'EOF' > docker-compose.yml
@@ -107,27 +103,33 @@ networks:
         - subnet: 172.20.0.0/16
 EOF
 
-echo -e "${CYN}X-> Creating data directories...${NC}"
-mkdir -p ./data/{database,var,nginx,certs,logs}
+echo -e "${CYN}X-> Starting containers...${NC}"
+docker-compose up -d
 
-echo -e "${GRN}X-> Starting Database and Cache...${NC}"
-docker-compose up -d database cache
-
-echo -e "${CYN}X-> Waiting 20 seconds for MariaDB to fully initialize...${NC}"
+echo -e "${CYN}X-> Waiting 20 seconds for MariaDB to boot...${NC}"
 sleep 20
 
-echo -e "${GRN}X-> Starting Panel Container...${NC}"
-docker-compose up -d panel
+echo -e "${CYN}X-> Disabling SSL requirement in MySQL client...${NC}"
+docker-compose exec -T panel sh -c 'mkdir -p /etc/my.cnf.d && printf "[client]\nssl=0\nskip-ssl=1\n[mysql]\nssl=0\nskip-ssl=1\n" > /etc/my.cnf.d/disable-ssl.cnf'
 
-echo -e "${CYN}X-> Disabling SSL requirement in container MySQL client...${NC}"
-docker-compose exec -T panel sh -c 'mkdir -p /etc/my.cnf.d && printf "[client]\nssl=0\nskip-ssl=1\n[mysql]\nssl=0\nskip-ssl=1\n[mariadb-client]\ndisable-ssl-verify-server-cert=1\n" > /etc/my.cnf.d/disable-ssl.cnf'
-docker-compose exec -T panel sh -c 'printf "[client]\nssl=0\nskip-ssl=1\n[mysql]\nssl=0\nskip-ssl=1\n[mariadb-client]\ndisable-ssl-verify-server-cert=1\n" >> /etc/my.cnf'
-
-echo -e "${CYN}X-> Generating Encryption Key and Running Migrations...${NC}"
+echo -e "${CYN}X-> Generating Encryption Key...${NC}"
 docker-compose exec -T panel php artisan key:generate --force
-docker-compose exec -T panel php artisan migrate --seed --force
 
-echo -e "${GRN}X-> Creating Admin User...${NC}"
-docker-compose exec -it panel php artisan p:user:make
+echo -e "${CYN}X-> Migrating Database Schema...${NC}"
+docker-compose exec -T panel php artisan migrate:fresh --seed --force
 
-echo -e "${YEL}✅ All done! Access your panel at http://YOUR_SERVER_IP:8030${NC}"
+echo -e "${GRN}X-> Creating Admin Account (Non-Interactive)...${NC}"
+docker-compose exec -T panel php artisan p:user:make \
+  --email="admin@example.com" \
+  --username="admin" \
+  --firstname="Admin" \
+  --lastname="User" \
+  --password="Password123!" \
+  --admin=1 \
+  --no-interaction
+
+echo -e "${YEL}--------------------------------------------------${NC}"
+echo -e "${GRN}✅ Installation Complete!${NC}"
+echo -e "${CYN}Email:    ${YEL}admin@example.com${NC}"
+echo -e "${CYN}Password: ${YEL}Password123!${NC}"
+echo -e "${YEL}--------------------------------------------------${NC}"
